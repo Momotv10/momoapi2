@@ -8,13 +8,7 @@ const app = express();
 app.use(express.json());
 
 // مسار حفظ الجلسة
-const sessionPath = path.join(__dirname, '.wwebjs_auth');
-
-// مسار حفظ الملف التلقائي
-const outputPath = path.join(__dirname, 'output');
-if (!fs.existsSync(outputPath)) {
-    fs.mkdirSync(outputPath, { recursive: true });
-}
+const sessionPath = path.join(__dirname, 'session.json');
 
 // تحقق مما إذا كانت الجلسة محفوظة
 const isSessionSaved = fs.existsSync(sessionPath);
@@ -51,15 +45,9 @@ client.on('qr', async (qr) => {
 client.on('ready', () => {
     console.log('✅ WhatsApp Client is ready!');
 
-    // إنشاء ملف تلقائيًا عند جاهزية العميل
-    const fileContent = `This file was created automatically at ${new Date().toISOString()}`;
-    const filePath = path.join(outputPath, 'auto_created_file.txt');
-
-    fs.writeFileSync(filePath, fileContent);
-    console.log(`✅ File created at: ${filePath}`);
-
-    // رفع الملف إلى GitHub تلقائيًا (اختياري)
-    uploadFileToGitHub(filePath);
+    // حفظ الجلسة في ملف بعد التسجيل
+    fs.writeFileSync(sessionPath, JSON.stringify(client.options.authStrategy.dataPath));
+    console.log("✅ Session saved to file:", sessionPath);
 });
 
 // API لإرسال رسالة
@@ -94,19 +82,3 @@ app.listen(PORT, '0.0.0.0', () => {
 
 // تهيئة العميل
 client.initialize();
-
-// دالة لرفع الملف إلى GitHub
-const uploadFileToGitHub = (filePath) => {
-    const simpleGit = require('simple-git');
-    const git = simpleGit();
-
-    git.add(filePath)
-        .commit('Auto-created file added')
-        .push('origin', 'main', (err) => {
-            if (err) {
-                console.error('❌ Failed to upload file to GitHub:', err);
-            } else {
-                console.log('✅ File uploaded to GitHub successfully');
-            }
-        });
-};
