@@ -2,80 +2,102 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 app.use(express.json());
 
-// مسار حفظ الجلسة
-const sessionPath = path.join(__dirname, 'session');
-
-// تحقق مما إذا كانت الجلسة محفوظة
-const isSessionSaved = fs.existsSync(path.join(sessionPath, 'session.json'));
-
 // إعداد عميل WhatsApp
 const client = new Client({
     authStrategy: new LocalAuth({
-        dataPath: sessionPath // تحديد مسار حفظ الجلسة
+        dataPath: './.wwebjs_auth',
+        clientId: 'whatsapp-session'
     }),
+    restartOnAuthFail: true,
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--disable-gpu',
+            '--no-zygote',
+            '--single-process'
+        ],
+        executablePath: '/nix/store/x205pbkd5xh5g4iv0g58xjla55has3cx-chromium-108.0.5359.94/bin/chromium'
     }
 });
 
-// متغير لتخزين QR Code كصورة
 let qrCodeImageUrl = null;
+let isClientReady = false;
 
-// توليد QR Code كصورة (فقط إذا لم تكن الجلسة محفوظة)
 client.on('qr', async (qr) => {
-    if (!isSessionSaved) {
-        console.log("✅ QR Code generated. Generating image...");
-
-        // إنشاء QR Code كصورة
-        const qrCodeImage = await qrcode.toDataURL(qr);
-        qrCodeImageUrl = qrCodeImage;
-
-        console.log("✅ QR Code image generated. Use the following URL to scan:");
-        console.log(qrCodeImageUrl); // هذا هو رابط الصورة
+    try {
+        qrCodeImageUrl = await qrcode.toDataURL(qr);
+        console.log("✅ تم إنشاء رمز QR بنجاح");
+    } catch (err) {
+        console.error("❌ خطأ في إنشاء رمز QR:", err);
     }
 });
 
-// التأكد من أن العميل جاهز
 client.on('ready', () => {
-    console.log('✅ WhatsApp Client is ready!');
-    console.log("✅ Session saved to file:", path.join(sessionPath, 'session.json'));
+    isClientReady = true;
+    console.log('✅ تم تسجيل الدخول بنجاح!');
+    
+    // إعادة تشغيل كل 4 ساعات
+    setInterval(async () => {
+        console.log('🔄 جاري إعادة تشغيل البوت...');
+        await client.destroy();
+        await client.initialize();
+        console.log('✅ تم إعادة تشغيل البوت بنجاح!');
+    }, 4 * 60 * 60 * 1000); // 4 ساعات
 });
 
-// API لإرسال رسالة
-app.post('/send', async (req, res) => {
-    const { phone, message } = req.body;
+client.on('disconnected', () => {
+    isClientReady = false;
+    console.log('❌ تم قطع الاتصال');
+});
 
+// مسار للتحقق من حالة السيرفر
+app.get('/', (req, res) => {
+    res.send('السيرفر يعمل! 👋');
+});
+
+app.get('/qrcode', (req, res) => {
+    if (isClientReady) {
+        return res.send('تم تسجيل الدخول بالفعل');
+    }
+    if (!qrCodeImageUrl) {
+        return res.status(404).send("الرجاء الانتظار... جاري إنشاء رمز QR");
+    }
+    res.send(`<img src="${qrCodeImageUrl}" alt="QR Code">`);
+});
+
+app.post('/send', async (req, res) => {
+    if (!isClientReady) {
+        return res.status(403).json({ error: "الرجاء تسجيل الدخول أولاً" });
+    }
+
+    const { phone, message } = req.body;
     if (!phone || !message) {
-        return res.status(400).json({ success: false, error: "رقم الهاتف والرسالة مطلوبان!" });
+        return res.status(400).json({ error: "الرجاء إدخال رقم الهاتف والرسالة" });
     }
 
     try {
-        await client.sendMessage(`${phone}@c.us`, message);
-        res.json({ success: true, message: "✅ تم إرسال الرسالة!" });
+        const formattedPhone = phone.replace(/[^\d]/g, '');
+        await client.sendMessage(`${formattedPhone}@c.us`, message);
+        res.json({ success: true, message: "✅ تم إرسال الرسالة بنجاح" });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error('❌ خطأ:', error);
+        res.status(500).json({ error: "حدث خطأ في إرسال الرسالة" });
     }
 });
 
-// API للحصول على QR Code كصورة
-app.get('/qrcode', (req, res) => {
-    if (!qrCodeImageUrl) {
-        return res.status(404).json({ success: false, error: "QR Code not generated yet." });
-    }
-    res.send(`<img src="${qrCodeImageUrl}" alt="QR Code" />`);
-});
-
-// تشغيل السيرفر
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`🚀 تم تشغيل السيرفر على المنفذ ${PORT}`);
+    client.initialize().catch(err => {
+        console.error('❌ خطأ في التهيئة:', err);
+    });
 });
-
-// تهيئة العميل
-client.initialize();
