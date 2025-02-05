@@ -10,6 +10,7 @@
     "express": "^4.18.2",
     "qrcode": "^1.5.1",
     "whatsapp-web.js": "^1.21.0",
-    "simple-git": "^3.0.0"
+    "simple-git": "^3.0.0",
+    "mysql2": "^3.0.0"  // إضافة مكتبة MySQL هنا
   }
 }
