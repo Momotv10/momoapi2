@@ -2,6 +2,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const express = require('express');
 const path = require('path');
+const puppeteer = require('puppeteer');
 
 const app = express();
 app.use(express.json());
@@ -15,6 +16,7 @@ const client = new Client({
     restartOnAuthFail: true,
     puppeteer: {
         headless: true,
+        executablePath: puppeteer.executablePath(),
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -24,8 +26,7 @@ const client = new Client({
             '--disable-gpu',
             '--no-zygote',
             '--single-process'
-        ],
-        executablePath: '/nix/store/x205pbkd5xh5g4iv0g58xjla55has3cx-chromium-108.0.5359.94/bin/chromium'
+        ]
     }
 });
 
