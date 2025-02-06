@@ -8,7 +8,7 @@ const app = express();
 app.use(express.json());
 
 // مسار حفظ الجلسة
-const sessionPath = path.join(__dirname, '.wwebjs_auth');
+const sessionPath = process.env.SESSION_PATH || path.join(__dirname, '.wwebjs_auth');
 
 // تحقق مما إذا كانت الجلسة محفوظة
 const isSessionSaved = fs.existsSync(sessionPath);
